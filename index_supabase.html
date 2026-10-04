@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎮 Memory Match Game</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', 'Noto Sans Thai', sans-serif; }
+        body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; color: #fff; }
+        .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+        .card { background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2); border-radius: 16px; padding: 24px; margin-bottom: 16px; }
+        .btn { padding: 12px 24px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s; }
+        .btn-primary { background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; }
+        .btn-success { background: #10b981; color: #fff; }
+        .btn-danger { background: #ef4444; color: #fff; }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+        input, select { width: 100%; padding: 12px; border: 2px solid rgba(255,255,255,0.2); border-radius: 8px; background: rgba(255,255,255,0.1); color: #fff; font-size: 16px; margin-bottom: 12px; }
+        input::placeholder { color: rgba(255,255,255,0.5); }
+        .hidden { display: none !important; }
+        .text-center { text-align: center; }
+        .mb-4 { margin-bottom: 16px; }
+        .grid { display: grid; gap: 12px; }
+        .grid-2 { grid-template-columns: repeat(2, 1fr); }
+        .grid-3 { grid-template-columns: repeat(3, 1fr); }
+        .grid-4 { grid-template-columns: repeat(4, 1fr); }
+        @media (max-width: 600px) { .grid-3, .grid-4 { grid-template-columns: repeat(2, 1fr); } }
+        .term-item { background: rgba(255,255,255,0.15); border: 2px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 12px; cursor: pointer; transition: all 0.2s; }
+        .term-item:hover { background: rgba(255,255,255,0.25); transform: translateX(4px); }
+        .term-item.selected { border-color: #6366f1; background: rgba(99,102,241,0.3); }
+        .term-item.matched { opacity: 0.3; pointer-events: none; }
+        .drop-zone { background: rgba(255,255,255,0.15); border: 2px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 12px; cursor: pointer; transition: all 0.2s; }
+        .drop-zone:hover { background: rgba(255,255,255,0.25); }
+        .drop-zone.selected { border-color: #ec4899; background: rgba(236,72,153,0.3); }
+        .drop-zone.matched { border-color: #10b981; background: rgba(16,185,129,0.3); }
+        .score-box { background: rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 16px; display: inline-block; margin: 4px; }
+        .progress-bar { height: 8px; background: rgba(255,255,255,0.2); border-radius: 4px; overflow: hidden; margin: 8px 0; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, #6366f1, #ec4899); transition: width 0.5s; }
+        .role-card { background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.2); border-radius: 16px; padding: 32px; text-align: center; cursor: pointer; transition: all 0.3s; }
+        .role-card:hover { transform: translateY(-4px); background: rgba(255,255,255,0.2); }
+        .role-card.selected { border-color: #6366f1; box-shadow: 0 0 20px rgba(99,102,241,0.4); }
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+        .modal { background: #1e1e2e; border-radius: 16px; padding: 24px; max-width: 500px; width: 100%; max-height: 80vh; overflow-y: auto; }
+        .stat-card { background: rgba(255,255,255,0.1); border-radius: 12px; padding: 16px; text-align: center; }
+        .stat-value { font-size: 2rem; font-weight: 800; }
+        .stat-label { font-size: 0.875rem; color: rgba(255,255,255,0.7); }
+    </style>
+</head>
+<body>
+    <div id="app" class="container"></div>
+
+    <script>
+        // ==================== DATABASE (SUPABASE) ====================
+        // ใส่ Project URL และ anon/publishable key จาก Supabase > Project Settings > API
+        // ห้ามใส่ service_role key ในไฟล์หน้าเว็บเด็ดขาด
+        const SUPABASE_URL = 'gtzunvwfoqjygyenkwvb';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0enVudndmb3FqeWd5ZW5rd3ZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExMDY4NjEsImV4cCI6MjEwNjY4Mjg2MX0.rK30ZpxCzygy0M4H_L86fYnz5tUpGYSXYTAU9uwravU';
+        const supabaseConfigured = SUPABASE_URL.startsWith('https://') &&
+            !SUPABASE_URL.includes('YOUR_SUPABASE') &&
+            SUPABASE_ANON_KEY && !SUPABASE_ANON_KEY.includes('YOUR_SUPABASE');
+        const supabaseClient = supabaseConfigured
+            ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+            : null;
+
+        const DB = {
+            async getGames() {
+                if (!supabaseClient) throw new Error('ยังไม่ได้ตั้งค่า Supabase ในไฟล์ index.html');
+                const { data, error } = await supabaseClient.from('games')
+                    .select('*').order('created_at', { ascending: false });
+                if (error) throw error;
+                return (data || []).map(row => ({
+                    id: row.id, name: row.name, icon: row.icon || '🎯',
+                    size: row.size || { rows: 3, cols: 4 }, pairs: row.pairs || [],
+                    createdAt: row.created_at, published: row.published !== false
+                }));
+            },
+            async saveGame(game) {
+                if (!supabaseClient) throw new Error('ยังไม่ได้ตั้งค่า Supabase');
+                const payload = {
+                    name: game.name, icon: game.icon, size: game.size,
+                    pairs: game.pairs, published: game.published !== false,
+                    created_by: (await supabaseClient.auth.getUser()).data.user?.id || null
+                };
+                let result;
+                if (game.id && typeof game.id === 'string') {
+                    result = await supabaseClient.from('games').update(payload).eq('id', game.id).select().single();
+                } else {
+                    result = await supabaseClient.from('games').insert(payload).select().single();
+                }
+                if (result.error) throw result.error;
+                return { ...game, id: result.data.id, createdAt: result.data.created_at };
+            },
+            async deleteGame(id) {
+                const { error } = await supabaseClient.from('games').delete().eq('id', id);
+                if (error) throw error;
+            },
+            async getScores() {
+                if (!supabaseClient) throw new Error('ยังไม่ได้ตั้งค่า Supabase');
+                const { data, error } = await supabaseClient.from('scores')
+                    .select('*').order('created_at', { ascending: false });
+                if (error) throw error;
+                return (data || []).map(row => ({
+                    id: row.id, studentName: row.student_name, gameId: row.game_id,
+                    gameName: row.game_name, score: row.score, maxScore: row.max_score,
+                    attempts: row.attempts, accuracy: row.accuracy, seconds: row.seconds,
+                    date: row.created_at
+                }));
+            },
+            async saveScore(score) {
+                if (!supabaseClient) throw new Error('ยังไม่ได้ตั้งค่า Supabase');
+                const { error } = await supabaseClient.from('scores').insert({
+                    student_id: (await supabaseClient.auth.getUser()).data.user?.id,
+                    student_name: score.studentName, game_id: score.gameId,
+                    game_name: score.gameName, score: score.score, max_score: score.maxScore,
+                    attempts: score.attempts, accuracy: score.accuracy, seconds: score.seconds
+                });
+                if (error) throw error;
+            },
+            getSession() { try { return JSON.parse(localStorage.getItem('mm_session')) || null; } catch { return null; } },
+            setSession(session) { localStorage.setItem('mm_session', JSON.stringify(session)); },
+            clearSession() { localStorage.removeItem('mm_session'); }
+        };
+
+        function showSetupError(message) {
+            const app = document.getElementById('app');
+            app.innerHTML = `<div class="card"><h2>⚙️ ตั้งค่าฐานข้อมูลก่อนใช้งาน</h2>
+                <p style="margin:12px 0">${message}</p>
+                <p>เปิดไฟล์ README_TH.md ที่แนบมากับโปรเจกต์ แล้วทำตามขั้นตอนตั้งค่า Supabase จากนั้นรีเฟรชหน้านี้</p></div>`;
+        }
+
+        // ==================== STATE ====================
+        let currentUser = null;
+        let currentRole = null;
+        let games = [];
+        let scores = [];
+        let currentGame = null;
+        let gameState = { terms: [], definitions: [], score: 0, maxScore: 0, attempts: 0, correctMatches: 0, seconds: 0, timer: null, selectedTerm: null, selectedDef: null, locked: false, studentName: '' };
+
+        // ==================== INIT ====================
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (!supabaseConfigured) {
+                showSetupError('ยังไม่ได้ใส่ Supabase URL และ anon key ในไฟล์ index.html');
+                return;
+            }
+            try {
+                const session = DB.getSession();
+                if (session) { currentUser = session.username; currentRole = session.role; }
+                await refreshData();
+                render();
+                // โหลดข้อมูลใหม่เป็นระยะ เพื่อให้คะแนนและเกมอัปเดตข้ามเครื่อง
+                setInterval(async () => {
+                    if (!currentUser || currentGame) return;
+                    try { await refreshData(); render(); } catch (e) { console.error(e); }
+                }, 15000);
+            } catch (e) {
+                console.error(e);
+                showSetupError('เชื่อมต่อฐานข้อมูลไม่สำเร็จ: ' + (e.message || 'โปรดตรวจ URL, key และ SQL/RLS'));
+            }
+        });
+
+        async function refreshData() {
+            const results = await Promise.all([DB.getGames(), DB.getScores()]);
+            games = results[0];
+            scores = results[1];
+        }
+
+        // ==================== RENDER ====================
+        function render() {
+            const app = document.getElementById('app');
+            if (!currentUser) {
+                app.innerHTML = renderLogin();
+            } else if (currentRole === 'teacher') {
+                app.innerHTML = renderDashboard();
+            } else {
+                app.innerHTML = renderStudentHome();
+            }
+        }
+
+        // ==================== LOGIN ====================
+        function renderLogin() {
+            return `
+                <div class="text-center" style="padding-top: 60px;">
+                    <div style="font-size: 4rem; margin-bottom: 16px;">🎮</div>
+                    <h1 style="font-size: 2.5rem; margin-bottom: 8px;">Memory Match</h1>
+                    <p style="color: rgba(255,255,255,0.7); margin-bottom: 32px;">เกมจับคู่คำศัพท์สำหรับนักเรียน</p>
+                    <div class="grid grid-2" style="max-width: 500px; margin: 0 auto 24px;">
+                        <div class="role-card" id="roleStudent" onclick="selectRole('student')">
+                            <div style="font-size: 3rem; margin-bottom: 8px;">👨‍🎓</div>
+                            <h3>นักเรียน</h3>
+                            <p style="color: rgba(255,255,255,0.7); font-size: 0.875rem;">เล่นเกมที่ครูสร้างไว้</p>
+                        </div>
+                        <div class="role-card" id="roleTeacher" onclick="selectRole('teacher')">
+                            <div style="font-size: 3rem; margin-bottom: 8px;">👩‍🏫</div>
+                            <h3>ครู</h3>
+                            <p style="color: rgba(255,255,255,0.7); font-size: 0.875rem;">สร้างและจัดการเกม</p>
+                        </div>
+                    </div>
+                    <div id="loginForm" class="card hidden" style="max-width: 400px; margin: 0 auto;">
+                        <h3 id="loginTitle" class="text-center mb-4"></h3>
+                        <form onsubmit="handleLogin(event)">
+                            <input type="text" id="loginUsername" placeholder="อีเมลครู หรือชื่อที่ใช้เล่นของนักเรียน" required>
+                            <input type="password" id="loginPassword" placeholder="รหัสผ่าน" required>
+                            <div id="loginError" class="text-center" style="color: #f87171; font-size: 0.875rem; margin-bottom: 12px;"></div>
+                            <button type="submit" class="btn btn-primary" style="width: 100%;">🔓 เข้าสู่ระบบ</button>
+                        </form>
+                    </div>
+                    <div class="card" style="max-width: 500px; margin: 24px auto 0; padding: 16px;">
+                        <h4 class="mb-4 text-center">📋 คำแนะนำ</h4>
+                        <div style="display: flex; flex-direction: column; gap: 12px; font-size: 0.9rem; color: rgba(255,255,255,0.8);">
+                            <div style="display: flex; align-items: flex-start; gap: 8px;">
+                                <span style="font-size: 1.25rem;">1️⃣</span>
+                                <span><strong>ครู:</strong> ใช้อีเมลและรหัสผ่านของบัญชี Supabase Auth ที่ตั้งค่าไว้</span>
+                            </div>
+                            <div style="display: flex; align-items: flex-start; gap: 8px;">
+                                <span style="font-size: 1.25rem;">2️⃣</span>
+                                <span><strong>นักเรียน:</strong> ใส่ชื่อที่ใช้แสดงคะแนน แล้วกดเข้าสู่ระบบ (ชื่อนี้ใช้ระบุคะแนน)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function selectRole(role) {
+            currentRole = role;
+            document.getElementById('roleStudent').classList.toggle('selected', role === 'student');
+            document.getElementById('roleTeacher').classList.toggle('selected', role === 'teacher');
+            document.getElementById('loginForm').classList.remove('hidden');
+            document.getElementById('loginTitle').textContent = role === 'student' ? '👨‍🎓 เข้าสู่ระบบนักเรียน' : '👩‍🏫 เข้าสู่ระบบครู';
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const u = document.getElementById('loginUsername').value.trim();
+            const p = document.getElementById('loginPassword').value;
+            const err = document.getElementById('loginError');
+            err.textContent = '';
+            if (!currentRole) { err.textContent = 'กรุณาเลือกบทบาทก่อน'; return; }
+            try {
+                if (currentRole === 'teacher') {
+                    const { data, error } = await supabaseClient.auth.signInWithPassword({ email: u, password: p });
+                    if (error) throw error;
+                    const { data: profile, error: profileError } = await supabaseClient
+                        .from('profiles').select('role, display_name').eq('id', data.user.id).single();
+                    if (profileError || !profile || profile.role !== 'teacher') {
+                        await supabaseClient.auth.signOut();
+                        throw new Error('บัญชีนี้ไม่ได้รับสิทธิ์ครู กรุณาตรวจสอบ profiles.role');
+                    }
+                    currentUser = profile.display_name || u;
+                    currentRole = 'teacher';
+                    DB.setSession({ username: currentUser, role: 'teacher' });
+                } else {
+                    if (!u) { err.textContent = 'กรุณากรอกชื่อ'; return; }
+                    // นักเรียนใช้ Supabase anonymous auth เพื่อให้คะแนนผูกกับ session ของตน
+                    const { data, error } = await supabaseClient.auth.signInAnonymously({
+                        options: { data: { display_name: u, role: 'student' } }
+                    });
+                    if (error) throw error;
+                    const studentId = data.user.id;
+                    const { error: profileError } = await supabaseClient.from('profiles').upsert({
+                        id: studentId, role: 'student', display_name: u
+                    });
+                    if (profileError) throw profileError;
+                    currentUser = u;
+                    currentRole = 'student';
+                    DB.setSession({ username: u, role: 'student', userId: studentId });
+                }
+                await refreshData();
+                render();
+            } catch (error) {
+                console.error(error);
+                err.textContent = error.message || 'เข้าสู่ระบบไม่สำเร็จ';
+            }
+        }
+
+        async function logout() {
+            if (supabaseClient) await supabaseClient.auth.signOut();
+            currentUser = null;
+            currentRole = null;
+            DB.clearSession();
+            render();
+        }
+
+        // ==================== STUDENT HOME ====================
+        function renderStudentHome() {
+            return `
+                <div class="card" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <span style="font-size: 2rem;">🎮</span>
+                        <h2 style="font-size: 1.5rem;">Memory Match</h2>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <span style="color: rgba(255,255,255,0.7);">👨‍🎓 ${currentUser}</span>
+                        <button onclick="logout()" class="btn btn-danger">🚪 ออก</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3 class="mb-4">👋 สวัสดี, ${currentUser}!</h3>
+                    <p style="color: rgba(255,255,255,0.7);">เลือกเกมที่ต้องการเล่น</p>
+                </div>
+                ${games.filter(g => g.published !== false).length === 0 ? `
+                    <div class="card text-center" style="padding: 48px;">
+                        <div style="font-size: 4rem; margin-bottom: 16px;">📭</div>
+                        <p style="color: rgba(255,255,255,0.7);">ยังไม่มีเกมให้เล่น</p>
+                        <p style="color: rgba(255,255,255,0.5); font-size: 0.875rem;">กรุณารอครูสร้างเกม</p>
+                    </div>
+                ` : `
+                    <div class="grid grid-3">
+                        ${games.map((g, i) => {
+                            const gameScores = scores.filter(s => s.gameId === g.id && s.studentName === currentUser);
+                            const bestScore = gameScores.length > 0 ? Math.max(...gameScores.map(s => s.score)) : 0;
+                            return `
+                            <div class="card">
+                                <h4 class="mb-4">${g.icon || '🎯'} ${g.name}</h4>
+                                <p style="color: rgba(255,255,255,0.7); font-size: 0.875rem; margin-bottom: 8px;">${g.pairs.length} คู่</p>
+                                ${bestScore > 0 ? `<p style="font-size: 1.25rem; font-weight: 700; margin-bottom: 8px;">🏆 ${bestScore}</p>` : ''}
+                                <p style="color: rgba(255,255,255,0.5); font-size: 0.75rem; margin-bottom: 16px;">เล่นแล้ว ${gameScores.length} ครั้ง</p>
+                                <button onclick="playGame(${i})" class="btn btn-success" style="width: 100%;">▶️ เล่นเกม</button>
+                            </div>
+                        `}).join('')}
+                    </div>
+                `}
+            `;
+        }
+
+        // ==================== TEACHER DASHBOARD ====================
+        function renderDashboard() {
+            const totalStudents = new Set(scores.map(s => s.studentName)).size;
+            const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b.score, 0) / scores.length) : 0;
+
+            return `
+                <div class="card" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <span style="font-size: 2rem;">🎮</span>
+                        <h2 style="font-size: 1.5rem;">Memory Match</h2>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <button onclick="showChangePassword()" class="btn btn-primary">🔑 เปลี่ยนรหัสผ่าน</button>
+                        <button onclick="logout()" class="btn btn-danger">🚪 ออก</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>👋 สวัสดี, ${currentUser}!</h3>
+                    <p style="color: rgba(255,255,255,0.7);">จัดการเกมและดูคะแนนนักเรียน</p>
+                </div>
+                <div class="grid grid-4 mb-4">
+                    <div class="stat-card">
+                        <div class="stat-value">${games.length}</div>
+                        <div class="stat-label">เกมทั้งหมด</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${totalStudents}</div>
+                        <div class="stat-label">นักเรียน</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${scores.length}</div>
+                        <div class="stat-label">ครั้งที่เล่น</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${avgScore}</div>
+                        <div class="stat-label">คะแนนเฉลี่ย</div>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;">
+                    <button onclick="showCreateGame()" class="btn btn-primary">➕ สร้างเกมใหม่</button>
+                    <button onclick="showStudentScores()" class="btn btn-success">📊 ดูคะแนนนักเรียน</button>
+                </div>
+                <h3 class="mb-4">📚 เกมทั้งหมด</h3>
+                ${games.length === 0 ? `
+                    <div class="card text-center" style="padding: 48px;">
+                        <div style="font-size: 4rem; margin-bottom: 16px;">📭</div>
+                        <p style="color: rgba(255,255,255,0.7);">ยังไม่มีเกม</p>
+                    </div>
+                ` : `
+                    <div class="grid grid-3">
+                        ${games.map((g, i) => {
+                            const gameScores = scores.filter(s => s.gameId === g.id);
+                            const avg = gameScores.length > 0 ? Math.round(gameScores.reduce((a, b) => a + b.score, 0) / gameScores.length) : 0;
+                            return `
+                            <div class="card">
+                                <h4 class="mb-4">${g.icon || '🎯'} ${g.name}</h4>
+                                <p style="color: rgba(255,255,255,0.7); font-size: 0.875rem;">${g.pairs.length} คู่</p>
+                                <p style="font-size: 1.25rem; font-weight: 700;">คะแนนเฉลี่ย: ${avg}</p>
+                                <p style="color: rgba(255,255,255,0.5); font-size: 0.75rem; margin-bottom: 16px;">ถูกเล่น ${gameScores.length} ครั้ง</p>
+                                <div style="display: flex; gap: 8px;">
+                                    <button onclick="playGame(${i})" class="btn btn-success" style="flex: 1;">▶️</button>
+                                    <button onclick="editGame(${i})" class="btn btn-primary">✏️</button>
+                                    <button onclick="deleteGame(${i})" class="btn btn-danger">🗑️</button>
+                                </div>
+                            </div>
+                        `}).join('')}
+                    </div>
+                `}
+                <div id="modalOverlay" class="modal-overlay hidden" onclick="if(event.target===this)closeModal()">
+                    <div id="modalContent" class="modal"></div>
+                </div>
+            `;
+        }
+
+        // ==================== MODAL ====================
+        function openModal(html) {
+            const o = document.getElementById('modalOverlay');
+            document.getElementById('modalContent').innerHTML = html;
+            o.classList.remove('hidden');
+        }
+        function closeModal() {
+            document.getElementById('modalOverlay').classList.add('hidden');
+        }
+
+        // ==================== CHANGE PASSWORD ====================
+        function showChangePassword() {
+            openModal(`
+                <h3 class="mb-4">🔑 เปลี่ยนรหัสผ่าน</h3>
+                <form onsubmit="handleChangePassword(event)">
+                    
+                    <input type="password" id="newPass" placeholder="รหัสผ่านใหม่" required>
+                    <input type="password" id="confPass" placeholder="ยืนยันรหัสผ่านใหม่" required>
+                    <div id="passErr" style="color: #f87171; font-size: 0.875rem; margin-bottom: 12px;"></div>
+                    <div style="display: flex; gap: 12px;">
+                        <button type="button" onclick="closeModal()" class="btn btn-danger" style="flex: 1;">ยกเลิก</button>
+                        <button type="submit" class="btn btn-primary" style="flex: 1;">บันทึก</button>
+                    </div>
+                </form>
+            `);
+        }
+
+        async function handleChangePassword(e) {
+            e.preventDefault();
+            const np = document.getElementById('newPass').value;
+            const cp = document.getElementById('confPass').value;
+            const err = document.getElementById('passErr');
+            if (np !== cp) { err.textContent = 'รหัสผ่านใหม่ไม่ตรงกัน'; return; }
+            if (np.length < 8) { err.textContent = 'รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร'; return; }
+            const { error } = await supabaseClient.auth.updateUser({ password: np });
+            if (error) { err.textContent = error.message; return; }
+            closeModal();
+            alert('เปลี่ยนรหัสผ่านสำเร็จ! ✅');
+        }
+
+        // ==================== CREATE GAME ====================
+        let selIcon = '🎯', selRows = 3, selCols = 4;
+
+        function showCreateGame() {
+            selIcon = '🎯'; selRows = 3; selCols = 4;
+            openModal(`
+                <h3 class="mb-4">➕ สร้างเกมใหม่</h3>
+                <form onsubmit="handleCreateGame(event)">
+                    <input type="text" id="gameName" placeholder="ชื่อเกม" required>
+                    <div class="mb-4">
+                        <label style="display: block; margin-bottom: 8px; color: rgba(255,255,255,0.7);">ไอคอน</label>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            ${['🎯','📚','🔬','🌍','🎨','🎵','⚡','🧮','💻','🏆'].map(i => `
+                                <button type="button" onclick="selIcon='${i}';this.parentElement.querySelectorAll('button').forEach(b=>b.style.border='2px solid rgba(255,255,255,0.2)');this.style.border='2px solid #6366f1';this.style.background='rgba(99,102,241,0.3)';" style="font-size: 1.5rem; padding: 8px; border: 2px solid ${i===selIcon?'#6366f1':'rgba(255,255,255,0.2)'}; background: ${i===selIcon?'rgba(99,102,241,0.3)':'transparent'}; border-radius: 8px; cursor: pointer;">${i}</button>
+                            `).join('')}
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label style="display: block; margin-bottom: 8px; color: rgba(255,255,255,0.7);">ขนาดตาราง</label>
+                        <div class="grid grid-3">
+                            ${[{r:3,c:4,l:'3x4 (6 คู่)'},{r:4,c:4,l:'4x4 (8 คู่)'},{r:4,c:5,l:'4x5 (10 คู่)'}].map(s => `
+                                <button type="button" onclick="selRows=${s.r};selCols=${s.c};genPairs()" style="padding: 8px; border: 2px solid ${s.r===selRows&&s.c===selCols?'#6366f1':'rgba(255,255,255,0.2)'}; background: ${s.r===selRows&&s.c===selCols?'rgba(99,102,241,0.3)':'transparent'}; border-radius: 8px; cursor: pointer; color: #fff; font-size: 0.75rem;">${s.l}</button>
+                            `).join('')}
+                        </div>
+                    </div>
+                    <div id="pairsList"></div>
+                    <div id="gameErr" style="color: #f87171; font-size: 0.875rem; margin-bottom: 12px;"></div>
+                    <div style="display: flex; gap: 12px;">
+                        <button type="button" onclick="closeModal()" class="btn btn-danger" style="flex: 1;">ยกเลิก</button>
+                        <button type="submit" class="btn btn-primary" style="flex: 1;">สร้างเกม</button>
+                    </div>
+                </form>
+            `);
+            genPairs();
+        }
+
+        function genPairs() {
+            const count = (selRows * selCols) / 2;
+            const list = document.getElementById('pairsList');
+            if (!list) return;
+            list.innerHTML = '';
+            for (let i = 0; i < count; i++) {
+                const div = document.createElement('div');
+                div.style.cssText = 'display: flex; gap: 8px; align-items: center; margin-bottom: 8px;';
+                div.innerHTML = `
+                    <span style="color: rgba(255,255,255,0.5); font-weight: 700; width: 20px; text-align: center;">${i+1}</span>
+                    <input type="text" id="pT${i}" placeholder="คำศัพท์" required style="flex: 1; margin-bottom: 0;">
+                    <span style="color: rgba(255,255,255,0.5);">→</span>
+                    <input type="text" id="pD${i}" placeholder="คำนิยาม" required style="flex: 1; margin-bottom: 0;">
+                `;
+                list.appendChild(div);
+            }
+        }
+
+        async function handleCreateGame(e) {
+            e.preventDefault();
+            const name = document.getElementById('gameName').value.trim();
+            const count = (selRows * selCols) / 2;
+            const pairs = [];
+            for (let i = 0; i < count; i++) {
+                const t = document.getElementById('pT' + i).value.trim();
+                const d = document.getElementById('pD' + i).value.trim();
+                if (t && d) pairs.push({ term: t, definition: d });
+            }
+            if (pairs.length < count) {
+                document.getElementById('gameErr').textContent = 'กรุณากรอกคำศัพท์และคำนิยามให้ครบ';
+                return;
+            }
+            try {
+                await DB.saveGame({ name, icon: selIcon, size: { rows: selRows, cols: selCols }, pairs, published: true });
+                await refreshData();
+                closeModal();
+                render();
+            } catch (error) {
+                document.getElementById('gameErr').textContent = 'บันทึกเกมไม่สำเร็จ: ' + error.message;
+            }
+        }
+
+        // ==================== EDIT GAME ====================
+        function editGame(idx) {
+            const g = games[idx];
+            openModal(`
+                <h3 class="mb-4">✏️ แก้ไขเกม</h3>
+                <form onsubmit="handleEditGame(event,${idx})">
+                    <input type="text" id="editName" value="${g.name}" required>
+                    <div id="editPairsList">
+                        ${g.pairs.map((p,i) => `
+                            <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
+                                <span style="color: rgba(255,255,255,0.5); font-weight: 700; width: 20px; text-align: center;">${i+1}</span>
+                                <input type="text" id="eT${i}" value="${p.term}" required style="flex: 1; margin-bottom: 0;">
+                                <span style="color: rgba(255,255,255,0.5);">→</span>
+                                <input type="text" id="eD${i}" value="${p.definition}" required style="flex: 1; margin-bottom: 0;">
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div id="editErr" style="color: #f87171; font-size: 0.875rem; margin-bottom: 12px;"></div>
+                    <div style="display: flex; gap: 12px;">
+                        <button type="button" onclick="closeModal()" class="btn btn-danger" style="flex: 1;">ยกเลิก</button>
+                        <button type="submit" class="btn btn-primary" style="flex: 1;">บันทึก</button>
+                    </div>
+                </form>
+            `);
+        }
+
+        async function handleEditGame(e, idx) {
+            e.preventDefault();
+            const name = document.getElementById('editName').value.trim();
+            const g = games[idx];
+            const pairs = [];
+            for (let i = 0; i < g.pairs.length; i++) {
+                const t = document.getElementById('eT' + i).value.trim();
+                const d = document.getElementById('eD' + i).value.trim();
+                if (t && d) pairs.push({ term: t, definition: d });
+            }
+            if (pairs.length < g.pairs.length) {
+                document.getElementById('editErr').textContent = 'กรุณากรอกให้ครบ';
+                return;
+            }
+            g.name = name;
+            g.pairs = pairs;
+            try {
+                await DB.saveGame(g);
+                await refreshData();
+                closeModal();
+                render();
+            } catch (error) {
+                document.getElementById('editErr').textContent = 'บันทึกไม่สำเร็จ: ' + error.message;
+            }
+        }
+
+        // ==================== DELETE ====================
+        async function deleteGame(idx) {
+            if (confirm('ลบเกม "' + games[idx].name + '" ใช่หรือไม่?')) {
+                try {
+                    await DB.deleteGame(games[idx].id);
+                    await refreshData();
+                    render();
+                } catch (error) { alert('ลบเกมไม่สำเร็จ: ' + error.message); }
+            }
+        }
+
+        // ==================== STUDENT SCORES ====================
+        function showStudentScores() {
+            if (scores.length === 0) {
+                openModal(`
+                    <div class="text-center">
+                        <div style="font-size: 4rem; margin-bottom: 16px;">📊</div>
+                        <h3 class="mb-4">ยังไม่มีข้อมูลคะแนน</h3>
+                        <p style="color: rgba(255,255,255,0.7); margin-bottom: 16px;">ยังไม่มีนักเรียนเล่นเกม</p>
+                        <button onclick="closeModal()" class="btn btn-primary">ปิด</button>
+                    </div>
+                `);
+                return;
+            }
+
+            const studentMap = {};
+            scores.forEach(s => {
+                if (!studentMap[s.studentName]) studentMap[s.studentName] = [];
+                studentMap[s.studentName].push(s);
+            });
+
+            const students = Object.entries(studentMap).map(([name, records]) => {
+                const avgScore = Math.round(records.reduce((a, b) => a + b.score, 0) / records.length);
+                const bestScore = Math.max(...records.map(r => r.score));
+                const totalPlays = records.length;
+                return { name, avgScore, bestScore, totalPlays };
+            }).sort((a, b) => b.avgScore - a.avgScore);
+
+            openModal(`
+                <h3 class="mb-4">📊 คะแนนนักเรียน</h3>
+                <div style="max-height: 400px; overflow-y: auto;">
+                    ${students.map((s, i) => `
+                        <div class="card" style="padding: 16px; margin-bottom: 12px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <div style="width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.875rem; background: ${i===0?'linear-gradient(135deg, #ffd700, #ffed4a)':i===1?'linear-gradient(135deg, #c0c0c0, #e5e7eb)':i===2?'linear-gradient(135deg, #cd7f32, #f59e0b)':'rgba(255,255,255,0.1)'}; color: ${i<3?'#000':'#fff'};">${i+1}</div>
+                                    <div>
+                                        <div style="font-weight: 700;">${s.name}</div>
+                                        <div style="font-size: 0.75rem; color: rgba(255,255,255,0.7);">เล่น ${s.totalPlays} ครั้ง</div>
+                                    </div>
+                                </div>
+                                <div style="text-align: right;">
+                                    <div style="font-size: 1.25rem; font-weight: 700;">${s.avgScore}</div>
+                                    <div style="font-size: 0.75rem; color: rgba(255,255,255,0.7);">เฉลี่ย</div>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 16px; font-size: 0.75rem; color: rgba(255,255,255,0.7);">
+                                <span>🏆 สูงสุด: ${s.bestScore}</span>
+                                <span>📝 เล่น: ${s.totalPlays} ครั้ง</span>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                <button onclick="closeModal()" class="btn btn-primary" style="width: 100%; margin-top: 16px;">ปิด</button>
+            `);
+        }
+
+        // ==================== PLAY GAME ====================
+        function playGame(idx) {
+            currentGame = games[idx];
+            gameState = {
+                terms: [], definitions: [], score: 0,
+                maxScore: currentGame.pairs.length * 10,
+                attempts: 0, correctMatches: 0, seconds: 0,
+                timer: null, selectedTerm: null, selectedDef: null,
+                locked: false, studentName: currentUser
+            };
+
+            const terms = currentGame.pairs.map((p, i) => ({ id: i, text: p.term, matched: false }));
+            const defs = currentGame.pairs.map((p, i) => ({ id: i, text: p.definition, matched: false }));
+
+            for (let i = terms.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [terms[i], terms[j]] = [terms[j], terms[i]];
+            }
+            for (let i = defs.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [defs[i], defs[j]] = [defs[j], defs[i]];
+            }
+
+            gameState.terms = terms;
+            gameState.definitions = defs;
+
+            document.getElementById('app').innerHTML = renderGameScreen();
+
+            gameState.timer = setInterval(() => {
+                gameState.seconds++;
+                const m = Math.floor(gameState.seconds / 60);
+                const s = gameState.seconds % 60;
+                const el = document.getElementById('gTimer');
+                if (el) el.textContent = m + ':' + s.toString().padStart(2, '0');
+            }, 1000);
+        }
+
+        function renderGameScreen() {
+            return `
+                <div class="card" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <button onclick="exitGame()" class="btn btn-danger">← กลับ</button>
+                        <span style="font-size: 1.5rem;">${currentGame.icon}</span>
+                        <h2 style="font-size: 1.25rem;">${currentGame.name}</h2>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                        <div class="score-box">คะแนน: <span id="gScore" style="font-weight: 700;">0</span>/${gameState.maxScore}</div>
+                        <div class="score-box">🎯 <span id="gMatch">0</span>/${currentGame.pairs.length}</div>
+                        <div class="score-box">⏱️ <span id="gTimer">0:00</span></div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="color: rgba(255,255,255,0.7);">ความคืบหน้า</span>
+                        <span id="progressText">0/${currentGame.pairs.length}</span>
+                    </div>
+                    <div class="progress-bar"><div class="progress-fill" id="progressBar" style="width: 0%;"></div></div>
+                </div>
+                <div class="card">
+                    <p class="text-center" style="color: rgba(255,255,255,0.7); margin-bottom: 16px;">👆 กดเลือกคำศัพท์ แล้วกดเลือกคำนิยามที่ตรงกัน</p>
+                    <div class="grid grid-2">
+                        <div>
+                            <h4 style="color: #c084fc; margin-bottom: 12px;">📝 คำศัพท์</h4>
+                            <div id="termsList">
+                                ${gameState.terms.map(t => `
+                                    <div class="term-item" data-id="${t.id}" onclick="selectTerm(${t.id})">${t.text}</div>
+                                `).join('')}
+                            </div>
+                        </div>
+                        <div>
+                            <h4 style="color: #f472b6; margin-bottom: 12px;">💡 คำนิยาม</h4>
+                            <div id="defsList">
+                                ${gameState.definitions.map(d => `
+                                    <div class="drop-zone" data-id="${d.id}" onclick="selectDef(${d.id})">${d.text}</div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-center" style="margin-top: 24px;">
+                        <button onclick="checkMatch()" id="btnCheck" class="btn btn-primary" style="padding: 12px 32px;" disabled>✅ ตรวจสอบคำตอบ</button>
+                    </div>
+                    <div id="gMsg" class="text-center" style="margin-top: 16px; font-weight: 500;"></div>
+                </div>
+                <div id="winModal" class="modal-overlay hidden">
+                    <div class="modal text-center">
+                        <div style="font-size: 4rem; margin-bottom: 16px;">🏆</div>
+                        <h2 class="mb-4">ยินดีด้วย!</h2>
+                        <p style="color: rgba(255,255,255,0.7); margin-bottom: 16px;">${gameState.studentName} จับคู่ครบทุกคู่แล้ว!</p>
+                        <div class="card mb-4">
+                            <div style="font-size: 2.5rem; font-weight: 800;" id="finalScore">0</div>
+                            <div style="color: rgba(255,255,255,0.7);">คะแนนรวม</div>
+                        </div>
+                        <div style="display: flex; gap: 16px; justify-content: center; margin-bottom: 24px;">
+                            <div><div style="color: rgba(255,255,255,0.7);">เวลา</div><div id="finalTime" style="font-weight: 700;">0:00</div></div>
+                            <div><div style="color: rgba(255,255,255,0.7);">ความแม่นยำ</div><div id="finalAccuracy" style="font-weight: 700;">0%</div></div>
+                        </div>
+                        <div style="display: flex; gap: 12px;">
+                            <button onclick="exitGame()" class="btn btn-danger" style="flex: 1;">กลับ</button>
+                            <button onclick="playGame(${games.indexOf(currentGame)})" class="btn btn-primary" style="flex: 1;">เล่นอีกครั้ง</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ==================== GAME LOGIC ====================
+        function selectTerm(id) {
+            if (gameState.locked) return;
+            const term = gameState.terms.find(t => t.id === id);
+            if (term.matched) return;
+            gameState.selectedTerm = gameState.selectedTerm === id ? null : id;
+            updateSelection();
+        }
+
+        function selectDef(id) {
+            if (gameState.locked) return;
+            const def = gameState.definitions.find(d => d.id === id);
+            if (def.matched) return;
+            gameState.selectedDef = gameState.selectedDef === id ? null : id;
+            updateSelection();
+        }
+
+        function updateSelection() {
+            document.querySelectorAll('.term-item').forEach(el => {
+                const id = parseInt(el.dataset.id);
+                el.classList.toggle('selected', id === gameState.selectedTerm);
+                const term = gameState.terms.find(t => t.id === id);
+                el.classList.toggle('matched', term.matched);
+            });
+            document.querySelectorAll('.drop-zone').forEach(el => {
+                const id = parseInt(el.dataset.id);
+                el.classList.toggle('selected', id === gameState.selectedDef);
+                const def = gameState.definitions.find(d => d.id === id);
+                el.classList.toggle('matched', def.matched);
+            });
+            const btn = document.getElementById('btnCheck');
+            if (btn) btn.disabled = !(gameState.selectedTerm !== null && gameState.selectedDef !== null);
+        }
+
+        function checkMatch() {
+            if (gameState.selectedTerm === null || gameState.selectedDef === null) return;
+            if (gameState.locked) return;
+
+            gameState.locked = true;
+            gameState.attempts++;
+
+            const term = gameState.terms.find(t => t.id === gameState.selectedTerm);
+            const def = gameState.definitions.find(d => d.id === gameState.selectedDef);
+
+            if (term.id === def.id) {
+                term.matched = true;
+                def.matched = true;
+                gameState.correctMatches++;
+                gameState.score += 10;
+                showMsg('✅ ถูกต้อง! +10 คะแนน', '#4ade80');
+                if (gameState.correctMatches === currentGame.pairs.length) {
+                    setTimeout(showWin, 600);
+                }
+            } else {
+                gameState.score = Math.max(0, gameState.score - 5);
+                showMsg('❌ ไม่ตรงกัน! -5 คะแนน', '#f87171');
+            }
+
+            gameState.selectedTerm = null;
+            gameState.selectedDef = null;
+            updateSelection();
+            updateStats();
+            gameState.locked = false;
+        }
+
+        function updateStats() {
+            document.getElementById('gScore').textContent = gameState.score;
+            document.getElementById('gMatch').textContent = gameState.correctMatches;
+            document.getElementById('progressText').textContent = gameState.correctMatches + '/' + currentGame.pairs.length;
+            const progress = (gameState.correctMatches / currentGame.pairs.length) * 100;
+            document.getElementById('progressBar').style.width = progress + '%';
+        }
+
+        function showMsg(text, color) {
+            const el = document.getElementById('gMsg');
+            el.textContent = text;
+            el.style.color = color;
+            setTimeout(() => { el.textContent = ''; }, 2500);
+        }
+
+        async function showWin() {
+            clearInterval(gameState.timer);
+            const accuracy = gameState.attempts ? Math.round((gameState.correctMatches / gameState.attempts) * 100) : 0;
+            const result = {
+                studentName: gameState.studentName,
+                gameId: currentGame.id,
+                gameName: currentGame.name,
+                score: gameState.score,
+                maxScore: gameState.maxScore,
+                attempts: gameState.attempts,
+                accuracy: accuracy,
+                seconds: gameState.seconds,
+                date: new Date().toISOString()
+            };
+            try {
+                await DB.saveScore(result);
+                await refreshData();
+                document.getElementById('finalScore').textContent = gameState.score + '/' + gameState.maxScore;
+                document.getElementById('finalTime').textContent = document.getElementById('gTimer').textContent;
+                document.getElementById('finalAccuracy').textContent = accuracy + '%';
+                document.getElementById('winModal').classList.remove('hidden');
+            } catch (error) {
+                alert('บันทึกคะแนนไม่สำเร็จ: ' + error.message + '\\nโปรดแจ้งครูตรวจการตั้งค่า Supabase');
+            }
+        }
+
+        function exitGame() {
+            clearInterval(gameState.timer);
+            currentGame = null;
+            render();
+        }
+    </script>
+</body>
+</html>
